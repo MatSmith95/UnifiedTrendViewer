@@ -1,0 +1,24 @@
+{
+  "name": "unifiedtrendviewer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:web": "vite",
+    "dev:api": "dotnet run --project server",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "tsc && vite build",
+    "build:api": "dotnet build server",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.1.0"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.21",
+    "echarts": "^6.1.0",
+    "papaparse": "^5.5.4"
+  }
+}
