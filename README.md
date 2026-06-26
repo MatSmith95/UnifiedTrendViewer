@@ -64,14 +64,43 @@ npm run dev
 Then browse to:
 
 ```text
-http://localhost:5173/?apiBaseUrl=http://localhost:5077
+http://localhost:5173/?apiBaseUrl=http://localhost:5262
 ```
+
+## Runtime PC Workflow
+
+Recommended for a real test application:
+
+1. Configure `server/appsettings.json` or a deployment-specific override so `TrendData:CsvFolder` points at your exported CSV folder
+2. Run the ASP.NET Core API locally on the Runtime PC
+3. Open the Vite front end or a built static deployment
+4. Set the API base URL in the viewer
+5. Confirm `/api/health`, `/api/config`, tag discovery, and trend loading all work against real exports
+
+The API reports:
+
+- health state
+- configured CSV folder
+- file pattern
+- file count
+- warnings and parsing errors
 
 ## Windows Build
 
 ```powershell
 npm run build
 ```
+
+## Test Ready Checklist
+
+1. `npm run build` passes
+2. `dotnet run --project server` starts with no configuration errors
+3. `/api/health` returns `ok` or `degraded` with a useful error
+4. `/api/config` shows the expected CSV folder and file count
+5. Front end connects to the API and discovers real tags
+6. Date-range queries return filtered results
+7. Exported filtered CSV matches the charted subset
+8. Missing/malformed CSV files show warnings instead of a crash
 
 ## WinCC Unified Fit
 

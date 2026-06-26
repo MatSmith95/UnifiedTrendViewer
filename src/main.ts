@@ -11,9 +11,13 @@ import { CanvasRenderer } from 'echarts/renderers';
 import dayjs from 'dayjs';
 import sampleCsvUrl from '../sample-data/example-trend-data.csv?url';
 import { buildDefaultPresets } from './presets/defaultPresets';
-import { createApiTrendDataSource } from './services/apiTrendDataSource';
+import {
+  createApiTrendDataSource,
+  fetchApiConfig,
+  fetchApiHealth,
+} from './services/apiTrendDataSource';
 import { createCsvTrendDataSource } from './services/csvTrendDataSource';
-import { parseRuntimeConfig } from './services/runtimeConfig';
+import { parseRuntimeConfig, persistApiBaseUrl } from './services/runtimeConfig';
 import type {
   TrendPoint,
   TrendDataSource,
@@ -74,6 +78,47 @@ app.innerHTML = `
       <aside class="side-panel">
         <div class="panel">
           <div class="panel__header">
+            <h2>Runtime Connection</h2>
+            <span id="mode-badge" class="badge">engineering</span>
+          </div>
+          <div class="panel__body panel__body--stack">
+            <label>
+              <span>API Base URL</span>
+              <input id="api-base-url" type="url" placeholder="http://localhost:5262" />
+            </label>
+            <div class="toolbar__buttons toolbar__buttons--compact">
+              <button id="connect-api-button" class="button button--primary">Use API</button>
+              <button id="use-sample-button" class="button">Use Sample Data</button>
+            </div>
+            <div class="runtime-grid">
+              <div>
+                <div class="muted">Source Mode</div>
+                <div id="data-source-mode"></div>
+              </div>
+              <div>
+                <div class="muted">Health</div>
+                <div id="api-health">Not checked</div>
+              </div>
+            </div>
+            <div class="runtime-grid">
+              <div>
+                <div class="muted">CSV Folder</div>
+                <div id="api-folder">n/a</div>
+              </div>
+              <div>
+                <div class="muted">Files</div>
+                <div id="api-files">n/a</div>
+              </div>
+            </div>
+            <label class="upload-label" id="upload-label">
+              <span>Load local CSV</span>
+              <input id="csv-upload" type="file" accept=".csv" />
+            </label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel__header">
             <h2>Available Tags</h2>
             <span id="tag-count" class="badge">0</span>
           </div>
@@ -89,19 +134,6 @@ app.innerHTML = `
           </div>
           <div class="panel__body panel__body--scroll">
             <div id="selected-tags" class="pen-list"></div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel__header">
-            <h2>Data Source</h2>
-          </div>
-          <div class="panel__body">
-            <p id="data-source-mode" class="muted"></p>
-            <label class="upload-label">
-              <span>Load local CSV</span>
-              <input id="csv-upload" type="file" accept=".csv" />
-            </label>
           </div>
         </div>
       </aside>
@@ -160,6 +192,7 @@ const state = {
   activePreset: runtimeConfig.defaultPreset,
   latestResult: null as TrendQueryResult | null,
   warnings: [] as string[],
+  apiBaseUrl: runtimeConfig.apiBaseUrl,
 };
 
 const presetSelect = document.querySelector<HTMLSelectElement>('#preset-select')!;
@@ -170,6 +203,9 @@ const loadButton = document.querySelector<HTMLButtonElement>('#load-button')!;
 const clearButton = document.querySelector<HTMLButtonElement>('#clear-button')!;
 const exportButton = document.querySelector<HTMLButtonElement>('#export-button')!;
 const csvUpload = document.querySelector<HTMLInputElement>('#csv-upload')!;
+const apiBaseUrlInput = document.querySelector<HTMLInputElement>('#api-base-url')!;
+const connectApiButton = document.querySelector<HTMLButtonElement>('#connect-api-button')!;
+const useSampleButton = document.querySelector<HTMLButtonElement>('#use-sample-button')!;
 const availableTagsContainer = document.querySelector<HTMLDivElement>('#available-tags')!;
 const selectedTagsContainer = document.querySelector<HTMLDivElement>('#selected-tags')!;
 const statsBody = document.querySelector<HTMLTableSectionElement>('#stats-body')!;
@@ -180,7 +216,12 @@ const statusFile = document.querySelector<HTMLDivElement>('#status-file')!;
 const statusPoints = document.querySelector<HTMLDivElement>('#status-points')!;
 const statusMode = document.querySelector<HTMLDivElement>('#status-mode')!;
 const statusMessages = document.querySelector<HTMLDivElement>('#status-messages')!;
-const dataSourceMode = document.querySelector<HTMLParagraphElement>('#data-source-mode')!;
+const dataSourceMode = document.querySelector<HTMLDivElement>('#data-source-mode')!;
+const apiHealth = document.querySelector<HTMLDivElement>('#api-health')!;
+const apiFolder = document.querySelector<HTMLDivElement>('#api-folder')!;
+const apiFiles = document.querySelector<HTMLDivElement>('#api-files')!;
+const modeBadge = document.querySelector<HTMLSpanElement>('#mode-badge')!;
+const uploadLabel = document.querySelector<HTMLLabelElement>('#upload-label')!;
 const chartContainer = document.querySelector<HTMLDivElement>('#trend-chart')!;
 const chart = echarts.init(chartContainer);
 
@@ -210,6 +251,16 @@ function setStatusMessages(messages: string[]): void {
   statusMessages.textContent = messages.join(' | ');
 }
 
+function updateConnectionUi(): void {
+  modeBadge.textContent = runtimeConfig.readOnlyOperatorMode ? 'operator' : 'engineering';
+  statusMode.textContent = `Mode: ${runtimeConfig.readOnlyOperatorMode ? 'operator' : 'engineering'}`;
+  apiBaseUrlInput.value = state.apiBaseUrl ?? '';
+  uploadLabel.style.display = runtimeConfig.readOnlyOperatorMode ? 'none' : 'grid';
+  dataSourceMode.textContent = state.apiBaseUrl
+    ? `API mode: ${state.apiBaseUrl}`
+    : 'Front-end CSV mode: bundled sample data';
+}
+
 function renderAvailableTags(): void {
   const filtered = state.availableTags.filter((tag) =>
     tag.toLowerCase().includes(state.tagSearch.toLowerCase()),
@@ -224,6 +275,7 @@ function renderAvailableTags(): void {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = state.selectedTags.includes(tag);
+    checkbox.disabled = runtimeConfig.readOnlyOperatorMode && !checkbox.checked;
     checkbox.addEventListener('change', () => {
       if (checkbox.checked && !state.selectedTags.includes(tag)) {
         state.selectedTags.push(tag);
@@ -262,6 +314,7 @@ function renderSelectedTags(): void {
     const remove = document.createElement('button');
     remove.className = 'button button--compact';
     remove.textContent = 'Remove';
+    remove.disabled = runtimeConfig.readOnlyOperatorMode;
     remove.addEventListener('click', () => {
       state.selectedTags = state.selectedTags.filter((selected) => selected !== tag);
       state.activePreset = 'Custom';
@@ -387,10 +440,16 @@ async function loadTags(): Promise<void> {
 }
 
 async function loadTrendData(): Promise<void> {
+  const fromUtc = dayjs(fromInput.value);
+  const toUtc = dayjs(toInput.value);
+  if (!fromUtc.isValid() || !toUtc.isValid() || fromUtc.isAfter(toUtc)) {
+    throw new Error('Choose a valid From/To range before loading trends.');
+  }
+
   const result = await dataSource.loadTrendData({
     tagNames: state.selectedTags,
-    fromUtc: dayjs(fromInput.value).toISOString(),
-    toUtc: dayjs(toInput.value).toISOString(),
+    fromUtc: fromUtc.toISOString(),
+    toUtc: toUtc.toISOString(),
   });
 
   state.latestResult = result;
@@ -431,12 +490,41 @@ function applyPreset(presetId: string): void {
   renderSelectedTags();
 }
 
-async function bootstrap(): Promise<void> {
-  statusMode.textContent = `Mode: ${runtimeConfig.readOnlyOperatorMode ? 'operator' : 'engineering'}`;
-  dataSourceMode.textContent = runtimeConfig.apiBaseUrl
-    ? `API mode: ${runtimeConfig.apiBaseUrl}`
-    : 'Front-end CSV mode: bundled sample data';
+async function switchToApiMode(apiBaseUrl: string): Promise<void> {
+  state.apiBaseUrl = apiBaseUrl.replace(/\/$/, '');
+  persistApiBaseUrl(state.apiBaseUrl);
+  dataSource = createApiTrendDataSource(state.apiBaseUrl);
+  updateConnectionUi();
 
+  const [health, config] = await Promise.all([
+    fetchApiHealth(state.apiBaseUrl),
+    fetchApiConfig(state.apiBaseUrl),
+  ]);
+
+  apiHealth.textContent = `${health.status} at ${dayjs(health.timestampUtc).format('HH:mm:ss')}`;
+  apiFolder.textContent = config.csvFolder;
+  apiFiles.textContent = `${config.fileCount} file(s)`;
+
+  syncPresetOptions();
+  await loadTags();
+  await loadTrendData();
+}
+
+async function switchToSampleMode(source?: File): Promise<void> {
+  state.apiBaseUrl = null;
+  persistApiBaseUrl(null);
+  dataSource = createCsvTrendDataSource(source ?? sampleCsvUrl, presets);
+  apiHealth.textContent = 'Local sample mode';
+  apiFolder.textContent = source ? source.name : 'Bundled sample-data';
+  apiFiles.textContent = '1 file';
+  updateConnectionUi();
+  syncPresetOptions();
+  await loadTags();
+  await loadTrendData();
+}
+
+async function bootstrap(): Promise<void> {
+  updateConnectionUi();
   setDefaultRange();
   syncPresetOptions();
 
@@ -451,7 +539,11 @@ async function bootstrap(): Promise<void> {
   });
 
   loadButton.addEventListener('click', async () => {
-    await loadTrendData();
+    try {
+      await loadTrendData();
+    } catch (error) {
+      setStatusMessages([error instanceof Error ? error.message : 'Failed to load trends.']);
+    }
   });
 
   clearButton.addEventListener('click', () => {
@@ -470,31 +562,48 @@ async function bootstrap(): Promise<void> {
     await exportFilteredData();
   });
 
+  connectApiButton.addEventListener('click', async () => {
+    const apiBaseUrl = apiBaseUrlInput.value.trim();
+    if (!apiBaseUrl) {
+      setStatusMessages(['Enter an API base URL first.']);
+      return;
+    }
+
+    try {
+      await switchToApiMode(apiBaseUrl);
+    } catch (error) {
+      setStatusMessages([error instanceof Error ? error.message : 'Failed to switch to API mode.']);
+    }
+  });
+
+  useSampleButton.addEventListener('click', async () => {
+    await switchToSampleMode();
+  });
+
   csvUpload.addEventListener('change', async () => {
     const file = csvUpload.files?.[0];
     if (!file) {
       return;
     }
 
-    dataSource = createCsvTrendDataSource(file, presets);
-    state.latestResult = null;
-    dataSourceMode.textContent = `Front-end CSV mode: ${file.name}`;
-    syncPresetOptions();
-    await loadTags();
-    await loadTrendData();
+    await switchToSampleMode(file);
   });
 
   window.addEventListener('resize', () => {
     chart.resize();
   });
 
-  await loadTags();
-  await loadTrendData();
+  try {
+    if (state.apiBaseUrl) {
+      await switchToApiMode(state.apiBaseUrl);
+    } else {
+      await switchToSampleMode();
+    }
+  } catch (error) {
+    setStatusMessages([error instanceof Error ? error.message : 'Startup failed.']);
+    renderChart(null);
+    renderStats(null);
+  }
 }
 
-bootstrap().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : 'Unexpected startup error';
-  renderChart(null);
-  renderStats(null);
-  setStatusMessages([message]);
-});
+bootstrap();

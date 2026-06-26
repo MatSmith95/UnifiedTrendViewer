@@ -1,5 +1,7 @@
 import { buildDefaultPresets } from '../presets/defaultPresets';
 import type {
+  ApiConfigResponse,
+  ApiHealthResponse,
   ApiTagResponse,
   ApiTrendResponse,
   TagCatalogResult,
@@ -35,4 +37,22 @@ export function createApiTrendDataSource(apiBaseUrl: string): TrendDataSource {
       return (await response.json()) as ApiTrendResponse;
     },
   };
+}
+
+export async function fetchApiHealth(apiBaseUrl: string): Promise<ApiHealthResponse> {
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/api/health`);
+  if (!response.ok) {
+    throw new Error(`Failed to load API health (${response.status}).`);
+  }
+
+  return (await response.json()) as ApiHealthResponse;
+}
+
+export async function fetchApiConfig(apiBaseUrl: string): Promise<ApiConfigResponse> {
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/api/config`);
+  if (!response.ok) {
+    throw new Error(`Failed to load API config (${response.status}).`);
+  }
+
+  return (await response.json()) as ApiConfigResponse;
 }

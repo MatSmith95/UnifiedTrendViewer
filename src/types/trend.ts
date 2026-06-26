@@ -74,3 +74,16 @@ export interface ApiTagResponse {
 }
 
 export interface ApiTrendResponse extends TrendQueryResult {}
+
+export interface ApiHealthResponse {
+  status: string;
+  timestampUtc: string;
+  note: string;
+}
+
+export interface ApiConfigResponse {
+  csvFolder: string;
+  filePattern: string;
+  fileCount: number;
+  availableFiles: string[];
+}

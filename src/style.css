@@ -113,6 +113,11 @@ select {
   gap: 8px;
 }
 
+.toolbar__buttons--compact {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .button {
   min-height: 38px;
   border: 1px solid #3c5468;
@@ -185,6 +190,11 @@ select {
 
 .panel__body {
   padding: 12px 14px;
+}
+
+.panel__body--stack {
+  display: grid;
+  gap: 12px;
 }
 
 .panel__body--scroll {
@@ -268,6 +278,13 @@ select {
 .upload-label {
   display: grid;
   gap: 6px;
+}
+
+.runtime-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: 0.85rem;
 }
 
 .upload-label input {
