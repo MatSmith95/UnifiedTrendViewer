@@ -13,6 +13,8 @@ dist-ssr
 *.local
 server/bin
 server/obj
+server/wwwroot
+publish
 
 # Editor directories and files
 .vscode/*

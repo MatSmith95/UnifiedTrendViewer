@@ -47,7 +47,7 @@ npm install
 npm run dev
 ```
 
-### API mode
+### API mode during development
 
 Terminal 1:
 
@@ -67,15 +67,16 @@ Then browse to:
 http://localhost:5173/?apiBaseUrl=http://localhost:5262
 ```
 
-## Runtime PC Workflow
+## Windows Runtime PC Deployment
 
-Recommended for a real test application:
+Recommended for a real test application or WinCC Unified screen embed:
 
-1. Configure `server/appsettings.json` or a deployment-specific override so `TrendData:CsvFolder` points at your exported CSV folder
-2. Run the ASP.NET Core API locally on the Runtime PC
-3. Open the Vite front end or a built static deployment
-4. Set the API base URL in the viewer
-5. Confirm `/api/health`, `/api/config`, tag discovery, and trend loading all work against real exports
+1. Configure `server/appsettings.json` so `TrendData:CsvFolder` points at your exported CSV folder
+2. Run `scripts\publish-windows.bat` on the Runtime PC
+3. Start the published executable from `publish\win-x64`
+4. Open `http://127.0.0.1:5262/trends/`
+5. The viewer will default to the same local API automatically
+6. Confirm `/api/health`, `/api/config`, tag discovery, and trend loading all work against real exports
 
 The API reports:
 
@@ -85,22 +86,36 @@ The API reports:
 - file count
 - warnings and parsing errors
 
-## Windows Build
+This is the cleanest local setup because one ASP.NET Core process hosts:
+
+- the trend viewer UI
+- the `/api/*` endpoints
+- a stable local URL for WinCC Unified Web Control embedding
+
+## Windows Build / Publish
 
 ```powershell
 npm run build
 ```
 
+Hosted publish output:
+
+```powershell
+npm run publish:windows
+```
+
 ## Test Ready Checklist
 
 1. `npm run build` passes
-2. `dotnet run --project server` starts with no configuration errors
+2. `scripts\publish-windows.bat` completes on Windows
 3. `/api/health` returns `ok` or `degraded` with a useful error
 4. `/api/config` shows the expected CSV folder and file count
-5. Front end connects to the API and discovers real tags
-6. Date-range queries return filtered results
-7. Exported filtered CSV matches the charted subset
-8. Missing/malformed CSV files show warnings instead of a crash
+5. `http://127.0.0.1:5262/trends/` opens and loads the hosted viewer
+6. Front end connects to the API and discovers real tags
+7. WinCC Unified Web Control can point at `http://127.0.0.1:5262/trends/`
+8. Date-range queries return filtered results
+9. Exported filtered CSV matches the charted subset
+10. Missing/malformed CSV files show warnings instead of a crash
 
 ## WinCC Unified Fit
 

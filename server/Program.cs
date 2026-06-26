@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.VisualBasic.FileIO;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls(builder.Configuration["Server:Urls"] ?? "http://127.0.0.1:5262");
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -16,6 +17,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 app.UseCors();
+app.UseStaticFiles();
 
 var presets = new[]
 {
@@ -27,6 +29,12 @@ var presets = new[]
     new TrendPreset("Thrusters", "Thrusters", "Thruster and track motion indicators", new[] { "Track_Left_Speed", "Track_Right_Speed" }),
     new TrendPreset("Custom", "Custom", "Operator-selected tag set", Array.Empty<string>()),
 };
+
+var hostedViewerIndex = Path.Combine(app.Environment.WebRootPath, "trends", "index.html");
+var hostedViewerAvailable = File.Exists(hostedViewerIndex);
+
+app.MapGet("/", () => Results.Redirect("/trends/"));
+app.MapGet("/trends", () => Results.Redirect("/trends/"));
 
 app.MapGet("/api/health", (IConfiguration configuration) =>
 {
@@ -143,6 +151,23 @@ app.MapGet("/api/trend", (HttpRequest request, IConfiguration configuration) =>
     });
 });
 
+if (hostedViewerAvailable)
+{
+    app.MapFallbackToFile("/trends/{*path:nonfile}", "trends/index.html");
+}
+else
+{
+    app.MapGet("/trends/{*path}", () => Results.Content(
+        """
+        UnifiedTrendViewer API is running, but the hosted frontend has not been built yet.
+
+        For local development:
+        - run `npm run dev` for the Vite frontend, or
+        - run `npm run build:web` to place the production frontend into `server/wwwroot/trends`
+        """,
+        "text/plain"));
+}
+
 app.Run();
 
 static CsvLoadResult TryLoadConfiguredCsv(IConfiguration configuration)
@@ -196,9 +221,16 @@ static (string CsvFolder, string FilePattern) ResolveCsvSettings(IConfiguration 
     {
         csvFolder = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "sample-data"));
     }
-    else if (!Path.IsPathRooted(csvFolder))
+    else
     {
-        csvFolder = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, csvFolder));
+        csvFolder = csvFolder
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+
+        if (!Path.IsPathRooted(csvFolder))
+        {
+            csvFolder = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, csvFolder));
+        }
     }
 
     return (csvFolder, filePattern);
